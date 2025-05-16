@@ -9,7 +9,6 @@ import (
 
 const (
 	serviceName            = "notary-k8s"
-	TracingIntegrationName = "tracing"
 )
 
 func main() {
@@ -23,7 +22,6 @@ func main() {
 	run(hc, hook)
 }
 
-// run initializes tracing, starts the root span, dispatches hooks, and ensures shutdown.
 func run(hc *goops.HookContext, hook string) {
 	ctx := context.Background()
 
