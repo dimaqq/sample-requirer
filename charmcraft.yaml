@@ -20,7 +20,7 @@ parts:
       bin/notary-k8s: dispatch
 
 requires:
-  access-certificates:
+  certificates:
     limit: 1
     interface: tls-certificates
     optional: true

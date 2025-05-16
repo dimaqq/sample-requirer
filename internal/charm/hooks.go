@@ -28,8 +28,7 @@ const (
 	CharmAccountUsername       = "charm@notary.com"
 	NotaryLoginSecretLabel     = "NOTARY_LOGIN"
 	MetricsIntegrationName     = "metrics"
-	TLSRequiresIntegrationName = "access-certificates"
-	TLSProvidesIntegrationName = "certificates"
+	TLSRequiresIntegrationName = "certificates"
 )
 
 func setPorts(ctx context.Context, hookContext *goops.HookContext) error {
@@ -58,55 +57,6 @@ func HandleDefaultHook(ctx context.Context, hookContext *goops.HookContext) {
 	defer span.End()
 
 	err := ensureLeader(ctx, hookContext)
-	if err != nil {
-		return
-	}
-
-	metadata, err := metadata.GetCharmMetadata(hookContext.Environment)
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not get charm metadata:", err.Error())
-		return
-	}
-
-	writePrometheus(ctx, hookContext, metadata.Name)
-
-	err = setPorts(ctx, hookContext)
-	if err != nil {
-		return
-	}
-
-	pebble, err := client.New(&client.Config{Socket: socketPath})
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not connect to pebble:", err.Error())
-		return
-	}
-
-	err = syncConfig(ctx, hookContext, pebble)
-	if err != nil {
-		return
-	}
-
-	changed, err := syncAccessCertificate(ctx, hookContext, pebble)
-	if err != nil {
-		return
-	}
-
-	err = syncPebbleService(ctx, hookContext, pebble, changed)
-	if err != nil {
-		return
-	}
-
-	err = createAdminAccount(ctx, hookContext, pebble)
-	if err != nil {
-		return
-	}
-
-	notaryClient := getLoggedInNotaryClient(hookContext, pebble)
-	if notaryClient == nil {
-		return
-	}
-
-	err = syncCertificatesProvides(hookContext, notaryClient)
 	if err != nil {
 		return
 	}
@@ -512,32 +462,17 @@ func syncTlsProviderCertificate(hookContext *goops.HookContext, pebble *client.C
 	return changed, nil
 }
 
-func syncAccessCertificate(ctx context.Context, hookContext *goops.HookContext, pebble *client.Client) (bool, error) {
+func syncAccessCertificate(ctx context.Context, hookContext *goops.HookContext) (bool, error) {
 	_, span := otel.Tracer("notary-k8s").Start(ctx, "Sync AccessCertificate")
 	defer span.End()
 
 	var changed bool
 
-	var err error
-
 	if !integrationCreated(hookContext, TLSRequiresIntegrationName) {
-		hookContext.Commands.JujuLog(commands.Info, "`access-certificates` integration not created")
-
-		changed, err = syncSelfSignedCertificate(hookContext, pebble)
-		if err != nil {
-			hookContext.Commands.JujuLog(commands.Error, "Could not sync self signed certificate:", err.Error())
-			return false, fmt.Errorf("could not sync self signed certificate: %v", err)
-		}
+		hookContext.Commands.JujuLog(commands.Info, "`certificates` integration not created")
 	} else {
-		changed, err = syncTlsProviderCertificate(hookContext, pebble)
-		if err != nil {
-			hookContext.Commands.JujuLog(commands.Error, "Could not sync tls provider certificate:", err.Error())
-			return false, fmt.Errorf("could not sync tls provider certificate: %v", err)
-		}
+		hookContext.Commands.JujuLog(commands.Info, "`certificates` integration created")
 	}
-
-	hookContext.Commands.JujuLog(commands.Info, "Synced TLS certificate")
-
 	return changed, nil
 }
 
@@ -561,112 +496,6 @@ func SetStatus(ctx context.Context, hookContext *goops.HookContext) {
 	}
 
 	hookContext.Commands.JujuLog(commands.Info, "Status set to active")
-}
-
-func createAdminAccount(ctx context.Context, hookContext *goops.HookContext, pebble *client.Client) error {
-	_, span := otel.Tracer("notary-k8s").Start(ctx, "Create AdminAccount")
-	defer span.End()
-
-	cert, err := getFileContent(pebble, CertPath)
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Certificate is not available", err.Error())
-		return fmt.Errorf("certificate is not available: %w", err)
-	}
-
-	if cert == "" {
-		hookContext.Commands.JujuLog(commands.Error, "Certificate is empty")
-		return fmt.Errorf("certificate is empty")
-	}
-
-	notaryClient, err := NewNotaryClient(cert)
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not create notary client:", err.Error())
-		return fmt.Errorf("could not create notary client: %w", err)
-	}
-
-	status, err := notaryClient.GetStatus()
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not get status:", err.Error())
-		return fmt.Errorf("could not get status: %w", err)
-	}
-
-	if status.Initialized {
-		return nil
-	}
-
-	password, err := getOrGenerateNotaryPassword(hookContext)
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not get or generate password:", err.Error())
-		return fmt.Errorf("could not get or generate password: %w", err)
-	}
-
-	if password == "" {
-		hookContext.Commands.JujuLog(commands.Error, "Password is empty")
-		return fmt.Errorf("could not get password from secret")
-	}
-
-	err = notaryClient.CreateAccount(&notary.CreateAccountOptions{
-		Username: CharmAccountUsername,
-		Password: password,
-	})
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not create account:", err.Error())
-		return fmt.Errorf("could not create account: %w", err)
-	}
-
-	hookContext.Commands.JujuLog(commands.Info, "Account created")
-
-	return nil
-}
-
-func getOrGenerateNotaryPassword(hookContext *goops.HookContext) (string, error) {
-	secret, _ := hookContext.Commands.SecretGet(&commands.SecretGetOptions{
-		Refresh: true,
-		Label:   NotaryLoginSecretLabel,
-	})
-
-	if secret != nil {
-		return secret["password"], nil
-	}
-
-	password, err := generateRandomPassword()
-	if err != nil {
-		return "", fmt.Errorf("could not generate random password: %w", err)
-	}
-
-	secretAddOpts := &commands.SecretAddOptions{
-		Label: NotaryLoginSecretLabel,
-		Content: map[string]string{
-			"password": password,
-			"username": CharmAccountUsername,
-		},
-	}
-
-	_, err = hookContext.Commands.SecretAdd(secretAddOpts)
-	if err != nil {
-		return "", fmt.Errorf("could not add secret: %w", err)
-	}
-
-	return password, nil
-}
-
-func generateRandomPassword() (string, error) {
-	const passwordLength = 16
-
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-	b := make([]byte, passwordLength)
-
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
-	}
-
-	for i := range b {
-		b[i] = charset[b[i]%byte(len(charset))]
-	}
-
-	return string(b), nil
 }
 
 func getHostname(hookContext *goops.HookContext) string {
