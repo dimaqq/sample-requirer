@@ -5,12 +5,7 @@ go 1.24.0
 require (
 	github.com/canonical/pebble v1.21.0
 	github.com/gruyaume/charm-libraries/certificates v0.0.0-20250512055438-198e951c4be2
-	github.com/gruyaume/charm-libraries/prometheus v0.0.0-20250515143500-6a46b8224d0f
-	github.com/gruyaume/charm-libraries/tracing v0.0.0-20250515143500-6a46b8224d0f
 	github.com/gruyaume/goops v0.0.12
-	github.com/gruyaume/notary-k8s-operator v0.0.0-20250515140709-d356b7c31d7f
-	go.opentelemetry.io/otel v1.35.0
-	go.opentelemetry.io/otel/sdk v1.35.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
