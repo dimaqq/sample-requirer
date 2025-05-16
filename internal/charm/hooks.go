@@ -17,7 +17,6 @@ import (
 	"github.com/gruyaume/goops/commands"
 	"github.com/gruyaume/goops/metadata"
 	"github.com/gruyaume/notary-k8s-operator/internal/notary"
-	"go.opentelemetry.io/otel"
 )
 
 const (
@@ -32,9 +31,6 @@ const (
 )
 
 func setPorts(ctx context.Context, hookContext *goops.HookContext) error {
-	_, span := otel.Tracer("notary-k8s").Start(ctx, "Set Ports")
-	defer span.End()
-
 	setPortOpts := &commands.SetPortsOptions{
 		Ports: []*commands.Port{
 			{
@@ -53,9 +49,6 @@ func setPorts(ctx context.Context, hookContext *goops.HookContext) error {
 }
 
 func HandleDefaultHook(ctx context.Context, hookContext *goops.HookContext) {
-	ctx, span := otel.Tracer("notary-k8s").Start(ctx, "Handle DefaultHook")
-	defer span.End()
-
 	err := ensureLeader(ctx, hookContext)
 	if err != nil {
 		return
@@ -92,9 +85,6 @@ func getLoggedInNotaryClient(hookContext *goops.HookContext, pebble *client.Clie
 }
 
 func ensureLeader(ctx context.Context, hookContext *goops.HookContext) error {
-	_, span := otel.Tracer("notary-k8s").Start(ctx, "ensureLeader")
-	defer span.End()
-
 	isLeader, err := hookContext.Commands.IsLeader()
 	if err != nil {
 		hookContext.Commands.JujuLog(commands.Warning, "Could not check if unit is leader:", err.Error())
@@ -112,9 +102,6 @@ func ensureLeader(ctx context.Context, hookContext *goops.HookContext) error {
 }
 
 func writePrometheus(ctx context.Context, hookContext *goops.HookContext, charmName string) {
-	_, span := otel.Tracer("notary-k8s").Start(ctx, "writePrometheus")
-	defer span.End()
-
 	prometheusIntegration := &prometheus.Integration{
 		HookContext:  hookContext,
 		RelationName: MetricsIntegrationName,
@@ -143,9 +130,6 @@ func writePrometheus(ctx context.Context, hookContext *goops.HookContext, charmN
 }
 
 func syncConfig(ctx context.Context, hookContext *goops.HookContext, pebble *client.Client) error {
-	_, span := otel.Tracer("notary-k8s").Start(ctx, "Sync Config")
-	defer span.End()
-
 	expectedConfig, err := getExpectedConfig()
 	if err != nil {
 		hookContext.Commands.JujuLog(commands.Error, "Could not get expected config:", err.Error())
@@ -164,9 +148,6 @@ func syncConfig(ctx context.Context, hookContext *goops.HookContext, pebble *cli
 }
 
 func syncPebbleService(ctx context.Context, hookContext *goops.HookContext, pebble *client.Client, restart bool) error {
-	_, span := otel.Tracer("notary-k8s").Start(ctx, "sync PebbleService")
-	defer span.End()
-
 	err := addPebbleLayer(pebble)
 	if err != nil {
 		hookContext.Commands.JujuLog(commands.Error, "Could not add pebble layer:", err.Error())
@@ -463,9 +444,6 @@ func syncTlsProviderCertificate(hookContext *goops.HookContext, pebble *client.C
 }
 
 func syncAccessCertificate(ctx context.Context, hookContext *goops.HookContext) (bool, error) {
-	_, span := otel.Tracer("notary-k8s").Start(ctx, "Sync AccessCertificate")
-	defer span.End()
-
 	var changed bool
 
 	if !integrationCreated(hookContext, TLSRequiresIntegrationName) {
@@ -477,9 +455,6 @@ func syncAccessCertificate(ctx context.Context, hookContext *goops.HookContext) 
 }
 
 func SetStatus(ctx context.Context, hookContext *goops.HookContext) {
-	_, span := otel.Tracer("notary-k8s").Start(ctx, "SetStatus")
-	defer span.End()
-
 	status := commands.StatusActive
 
 	message := ""

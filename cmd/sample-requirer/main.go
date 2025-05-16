@@ -7,8 +7,6 @@ import (
 	"github.com/gruyaume/goops"
 	"github.com/gruyaume/goops/commands"
 	"github.com/gruyaume/notary-k8s-operator/internal/charm"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/sdk/trace"
 )
 
 const (
@@ -32,11 +30,6 @@ func run(hc *goops.HookContext, hook string) {
 	ctx, tp := initTracing(hc)
 	// ensure tracer is shut down
 	defer shutdown(tp, ctx)
-
-	tracer := otel.Tracer(serviceName)
-	ctx, span := tracer.Start(ctx, hook)
-
-	defer span.End()
 
 	// execute charm hooks under span
 	charm.HandleDefaultHook(ctx, hc)
