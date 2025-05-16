@@ -1,10 +1,8 @@
-name: notary-k8s
-summary: Certificate management made easy
+name: sample-requirer
+summary: Sample
 
 description: |
-  Notary helps you manage certificate requests and their associated certificates.
-  Charmed Notary helps you automatically receive CSRs and distribute certificates to the applications
-  you've deployed in your model.
+  Sample
 
 type: charm
 base: ubuntu@24.04
@@ -21,40 +19,8 @@ parts:
     organize:
       bin/notary-k8s: dispatch
 
-containers:
-  notary:
-    resource: notary-image
-    mounts:
-    - storage: config
-      location: /etc/notary/config
-    - storage: database
-      location: /var/lib/notary/database
-
-storage:
-  config:
-    type: filesystem
-    minimum-size: 5M
-  database:
-    type: filesystem
-    minimum-size: 1G
-
-resources:
-  notary-image:
-    type: oci-image
-    description: OCI image for the Notary application
-    upstream-source: ghcr.io/canonical/notary:0.0.3
-
-provides:
-  certificates:
-    interface: tls-certificates
-  metrics:
-    interface: prometheus_scrape
-
 requires:
   access-certificates:
     limit: 1
     interface: tls-certificates
     optional: true
-  tracing:
-    interface: tracing
-    limit: 1
