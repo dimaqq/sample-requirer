@@ -1,5 +1,5 @@
-github.com/canonical/pebble v1.21.0 h1:UWJyDtWZcTUc0g/bVomzgMP7Q7lCYkPK3bplME5BWHI=
-github.com/canonical/pebble v1.21.0/go.mod h1:4FuafBIWiGSLrvzlqtVrH+p94Anm5Qj5qElptozMZG8=
+github.com/canonical/pebble v1.22.1 h1:wQax7uZd6DW7FZ2m1u0IOq02vYUrrbtuJNktsqST2ls=
+github.com/canonical/pebble v1.22.1/go.mod h1:4FuafBIWiGSLrvzlqtVrH+p94Anm5Qj5qElptozMZG8=
 github.com/gorilla/websocket v1.5.1 h1:gmztn0JnHVt9JZquRuzLw3g4wouNVzKL15iLr/zn/QY=
 github.com/gorilla/websocket v1.5.1/go.mod h1:x3kM2JMyaluk02fnUJpQuwD2dCS5NDG2ZHL0uE0tcaY=
 github.com/gruyaume/charm-libraries/certificates v0.0.0-20250512055438-198e951c4be2 h1:+Fn0kxkkfxzeZv4VX+5mSnMP9CaCN9Jjey/UTqnAHNg=
