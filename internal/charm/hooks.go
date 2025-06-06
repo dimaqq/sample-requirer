@@ -2,7 +2,6 @@ package charm
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -15,8 +14,6 @@ import (
 	"github.com/gruyaume/charm-libraries/prometheus"
 	"github.com/gruyaume/goops"
 	"github.com/gruyaume/goops/commands"
-	"github.com/gruyaume/goops/metadata"
-	"github.com/gruyaume/notary-k8s-operator/internal/notary"
 )
 
 const (
@@ -30,58 +27,25 @@ const (
 	TLSRequiresIntegrationName = "certificates"
 )
 
-func setPorts(ctx context.Context, hookContext *goops.HookContext) error {
-	setPortOpts := &commands.SetPortsOptions{
-		Ports: []*commands.Port{
-			{
-				Port:     APIPort,
-				Protocol: "tcp",
-			},
-		},
-	}
-
-	err := hookContext.Commands.SetPorts(setPortOpts)
-	if err != nil {
-		return fmt.Errorf("could not set ports: %w", err)
-	}
-
-	return nil
-}
-
 func HandleDefaultHook(ctx context.Context, hookContext *goops.HookContext) {
-	err := ensureLeader(ctx, hookContext)
+	isLeader, err := hookContext.Commands.IsLeader()
 	if err != nil {
+		hookContext.Commands.JujuLog(commands.Warning, "is-leader fail:", err.Error())
 		return
 	}
-}
 
-func getLoggedInNotaryClient(hookContext *goops.HookContext, pebble *client.Client) *notary.Client {
-	cert, err := getFileContent(pebble, CertPath)
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Certificate is not available", err.Error())
-		return nil
+	if isLeader {
+		// Own the secret
+		// Store private key in the secret
+		// Set the secret URI to the peer relation
+		// Save the certificate to the peer relation
+		return
+	} else {
+		// Parse peer relation databag
+		// Get secret URI and certificate
+		// Get the private key from the secret
+		return
 	}
-
-	if cert == "" {
-		hookContext.Commands.JujuLog(commands.Error, "Certificate is empty")
-		return nil
-	}
-
-	notaryClient, err := NewNotaryClient(cert)
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not create notary client:", err.Error())
-		return nil
-	}
-
-	err = loginNotaryClient(hookContext, notaryClient)
-	if err != nil {
-		hookContext.Commands.JujuLog(commands.Error, "Could not login to Notary client", err.Error())
-		return nil
-	}
-
-	hookContext.Commands.JujuLog(commands.Info, "Logged in to notary")
-
-	return notaryClient
 }
 
 func ensureLeader(ctx context.Context, hookContext *goops.HookContext) error {
@@ -177,85 +141,6 @@ func syncPebbleService(ctx context.Context, hookContext *goops.HookContext, pebb
 	return nil
 }
 
-// syncCertificatesProvides provides TLS certificates to TLS requirers.
-func syncCertificatesProvides(hookContext *goops.HookContext, notaryClient *notary.Client) error {
-	if !integrationCreated(hookContext, TLSProvidesIntegrationName) {
-		return nil
-	}
-
-	provider := certificates.IntegrationProvider{
-		HookContext:  hookContext,
-		RelationName: TLSProvidesIntegrationName,
-	}
-
-	databagReqs, err := provider.GetOutstandingCertificateRequests()
-	if err != nil {
-		return fmt.Errorf("could not list databag certificate requests: %w", err)
-	}
-
-	notaryReqs, err := notaryClient.ListCertificateRequests()
-	if err != nil {
-		return fmt.Errorf("could not list notary certificate requests: %w", err)
-	}
-
-	for _, dr := range databagReqs {
-		csr := dr.CertificateSigningRequest.Raw
-		matches := findNotaryRequestsByCSR(csr, notaryReqs)
-
-		switch len(matches) {
-		case 0: // No matching Certificate Request in Notary
-			hookContext.Commands.JujuLog(commands.Info, "No matching notary certificate request found; sending new request")
-
-			err := notaryClient.RequestCertificate(&notary.CreateCertificateRequestOptions{CSR: csr})
-			if err != nil {
-				hookContext.Commands.JujuLog(commands.Error, "Could not request certificate:", err.Error())
-				return fmt.Errorf("could not request certificate: %w", err)
-			}
-
-			hookContext.Commands.JujuLog(commands.Info, "Certificate request sent to notary")
-
-		case 1: // One matching Certificate Request in Notary
-			nr := matches[0]
-			if nr.Status != "Active" {
-				hookContext.Commands.JujuLog(commands.Debug, "Notary certificate request is not active")
-				continue
-			}
-
-			if provider.AlreadyProvided(dr.RelationID, csr) {
-				continue
-			}
-
-			if err := sendCertificate(provider, dr.RelationID, nr); err != nil {
-				hookContext.Commands.JujuLog(commands.Error,
-					"Could not set relation certificate:", err.Error())
-				return fmt.Errorf("could not set relation certificate: %w", err)
-			}
-
-			hookContext.Commands.JujuLog(commands.Info, "Relation certificate set")
-
-		default: // Multiple matching Certificate Requests in Notary
-			hookContext.Commands.JujuLog(commands.Error,
-				"Multiple notary certificate requests found for databag certificate request")
-			return fmt.Errorf("multiple notary certificate requests found for databag certificate request")
-		}
-	}
-
-	return nil
-}
-
-// findNotaryRequestsByCSR returns all Notary requests whose CSR exactly matches.
-func findNotaryRequestsByCSR(csr string, reqs []*notary.CertificateRequest) []*notary.CertificateRequest {
-	var out []*notary.CertificateRequest
-
-	for _, r := range reqs {
-		if r.CSR == csr {
-			out = append(out, r)
-		}
-	}
-
-	return out
-}
-
 func sendCertificate(
 	provider certificates.IntegrationProvider,
 	relationID string,
@@ -332,6 +217,9 @@ func integrationCreated(hookContext *goops.HookContext, name string) bool {
 }
 
 func syncSelfSignedCertificate(hookContext *goops.HookContext, pebble *client.Client) (bool, error) {
+	// FIXME: somewhere to store the cert private key
+	// - either stash it in a file
+	// - or store it in a secret
 	certContent, _ := getFileContent(pebble, CertPath)
 
 	if certContent != "" {

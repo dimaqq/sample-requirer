@@ -7,10 +7,6 @@ import (
 	"github.com/dimaqq/sample-requirer/internal/charm"
 )
 
-const (
-	serviceName            = "notary-k8s"
-)
-
 func main() {
 	hc := goops.NewHookContext()
 	hook := hc.Environment.JujuHookName()
@@ -19,10 +15,10 @@ func main() {
 		return
 	}
 
-	run(hc, hook)
+	run(hc)
 }
 
-func run(hc *goops.HookContext, hook string) {
+func run(hc *goops.HookContext) {
 	ctx := context.Background()
 
 	charm.HandleDefaultHook(ctx, hc)
